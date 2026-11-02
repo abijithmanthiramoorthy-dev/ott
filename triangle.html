@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#12355b">
+  <title>Triangle Levels — Option Tricky Trade</title>
+  <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="dashboard.html">Option Tricky Trade</a>
+  <div class="right"><span class="who" id="clock"></span></div>
+</header>
+
+<main class="container">
+  <!-- Local test page: shows levels.json made by  node scripts/fetch-levels.mjs --local
+       (no login / Firebase needed). Refreshes by itself every minute. -->
+  <div class="card">
+    <div class="tri-head">
+      <div>
+        <h2>🔺 Triangle levels</h2>
+        <p class="muted small" id="meta">Loading…</p>
+      </div>
+      <div class="seg" role="tablist" aria-label="Index">
+        <button type="button" role="tab" data-ix="nifty" aria-selected="true">NIFTY</button>
+        <button type="button" role="tab" data-ix="sensex" aria-selected="false">SENSEX</button>
+      </div>
+    </div>
+    <div id="box"></div>
+    <p class="muted small" id="status"></p>
+  </div>
+  <p class="fine">For educational purposes only. Not investment advice.</p>
+</main>
+
+<script>
+  // Modules don't load from a double-clicked file — explain instead of showing a blank page
+  if (location.protocol === "file:") document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("meta").innerHTML = '<b>Open this page with Live Server.</b> In VS Code right-click triangle.html → <b>Open with Live Server</b>.';
+  });
+</script>
+<script type="module">
+  import { renderTriangle, TRIANGLE_CSS, fmtIsoDate } from "./triangle-view.js";
+  document.head.insertAdjacentHTML("beforeend", `<style>${TRIANGLE_CSS}</style>`);
+
+  const $ = id => document.getElementById(id);
+  let data = null, ix = "nifty", lastStamp = "";
+
+  function draw() {
+    document.querySelectorAll("[data-ix]").forEach(b => b.setAttribute("aria-selected", b.dataset.ix === ix));
+    const L = data && data[ix];
+    if (!L) {
+      $("meta").textContent = data ? `No ${ix.toUpperCase()} levels in levels.json.` : "";
+      $("box").innerHTML = "";
+      return;
+    }
+    $("meta").textContent = `${L.index} · levels for ${fmtIsoDate(L.forDate || L.tradeDate)} · from ${fmtIsoDate(L.tradeDate)} settlement (yesterday) · expiry ${fmtIsoDate(L.expiry)} · step ${L.step}`;
+    $("box").innerHTML = renderTriangle(L);
+  }
+  document.querySelectorAll("[data-ix]").forEach(b => b.onclick = () => { ix = b.dataset.ix; draw(); });
+
+  async function load() {
+    try {
+      const res = await fetch("levels.json?t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status === 404 ? "missing" : "HTTP " + res.status);
+      const d = await res.json();
+      if (d.updatedAt !== lastStamp) { data = d; lastStamp = d.updatedAt; draw(); }
+      const when = d.updatedAt ? new Date(d.updatedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—";
+      $("status").textContent = `File updated ${when}${d.errors && d.errors.length ? " · problems: " + d.errors.join("; ") : ""} · checks for new data every minute`;
+    } catch (e) {
+      $("meta").textContent = "";
+      $("box").innerHTML = e.message === "missing"
+        ? `<div class="notice"><b>No levels.json yet.</b> In the VS Code terminal run:<br><code>cd scripts</code><br><code>npm install</code> (first time)<br><code>node fetch-levels.mjs --local</code><br>Then this page fills in by itself.</div>`
+        : (location.protocol === "file:"
+            ? `<div class="notice"><b>Open this page with Live Server.</b> Right-click triangle.html in VS Code → <b>Open with Live Server</b>. Double-clicking the file does not work.</div>`
+            : `<div class="notice">Could not read levels.json: ${e.message}</div>`);
+    }
+  }
+
+  setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }); }, 1000);
+  load();
+  setInterval(load, 60000);
+</script>
+</body>
+</html>
